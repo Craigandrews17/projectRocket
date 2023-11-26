@@ -1,0 +1,77 @@
+#include "Arduino_BMI270_BMM150.h"
+#include <MadgwickAHRS.h>
+
+float gx, gy, gz, ax, ay, az, mx, my, mz;
+float roll, pitch, yaw;
+Madgwick filter;
+
+unsigned long lastMagUpdate = 0; //can hold large positive integers 
+const int magUpdateRate = 100; // Magnetometer update rate in milliseconds (10 Hz)
+
+void setup() {
+  // Existing setup code...
+  Serial.begin(9600);
+  while (!Serial) 
+    Serial.println("Started");
+
+  if (!IMU.begin()) {
+    Serial.println("IMU initialization unsuccessful");
+    while (1);
+  }
+  Serial.print("Accelerometer sample rate = ");
+  Serial.print(IMU.accelerationSampleRate());
+  Serial.println(" Hz");
+
+  Serial.print("Gyroscope sample rate = ");
+  Serial.println(IMU.gyroscopeSampleRate());
+  Serial.println(" Hz");
+
+  Serial.println("Magnetometer sample rate = ");
+  Serial.print(IMU.magneticFieldSampleRate());
+  Serial.println(" Hz");
+
+  filter.begin(IMU.accelerationSampleRate());
+}
+
+void loop() {
+  if (IMU.gyroscopeAvailable() && IMU.accelerationAvailable()) {
+    float Rgx, Rgy, Rgz;
+    float Rax, Ray, Raz;
+    IMU.readGyroscope(Rgx, Rgy, Rgz);
+    IMU.readAcceleration(Rax, Ray, Raz);
+
+    convertToRadians(Rgx,Rgy,Rgz); 
+    convertToM_s2(Rax,Ray,Raz);
+
+    
+    
+
+    // Update the magnetometer readings less frequently
+    if (millis() - lastMagUpdate >= magUpdateRate) { //millis returns time since program began
+      if (IMU.magneticFieldAvailable()) {            //Imu read only if certain time has passed since last 
+        IMU.readMagneticField(mx, my, mz);
+        lastMagUpdate = millis();
+      }
+    }
+
+
+    filter.update(gx, gy, gz, ax, ay, az, mx, my, mz);
+
+    // Convert to Euler angles
+    roll = filter.getRoll();
+    pitch = filter.getPitch();
+    yaw = filter.getYaw();
+
+    // Output the data
+    Serial.print("Roll: "); Serial.print(roll); Serial.print("\t");
+    Serial.print("Pitch: "); Serial.print(pitch); Serial.print("\t");
+    Serial.print("Yaw: "); Serial.print(yaw); Serial.println();
+  }
+}
+void convertToRadians(float Rgx, float Rgy, float Rgz) {
+     gx = Rgx*PI/180; gy= Rgy*PI/180; gz = Rgz*PI/180;
+   }
+void convertToM_s2(float Rax, float Ray, float Raz) {
+     ax =Rax*9.81; ay=Ray*9.81; az =Raz*9.81;
+}
+ 
